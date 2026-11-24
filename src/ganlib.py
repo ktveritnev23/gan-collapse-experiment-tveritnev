@@ -6,6 +6,7 @@ An "epoch" is one pass of the training set through the discriminator/critic.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -60,7 +61,57 @@ class Config:
 def set_seed(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(False)
+
+
+def resolve_device(prefer: str | None = None) -> torch.device:
+    """Pick the training device: CUDA/ROCm, then MPS, then CPU.
+
+    ROCm builds of PyTorch expose the HIP runtime through the ``torch.cuda`` API and set
+    ``torch.version.hip``, so "cuda" is the right name on an AMD GPU too. ``prefer`` (or
+    the ``GAN_DEVICE`` environment variable) overrides auto-detection: ``cuda``/``rocm``,
+    ``mps``, ``cpu``.
+    """
+    if isinstance(prefer, torch.device):
+        return prefer
+    prefer = str(prefer or os.environ.get("GAN_DEVICE") or "").strip().lower()
+    if prefer in ("", "auto"):
+        prefer = ""
+    if prefer in ("cuda", "rocm", "hip"):
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA/ROCm requested, but torch.cuda.is_available() is False")
+        return torch.device("cuda")
+    if prefer == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS requested, but torch.backends.mps.is_available() is False")
+        return torch.device("mps")
+    if prefer == "cpu":
+        return torch.device("cpu")
+    if prefer:
+        raise ValueError(f"unknown device {prefer!r}; use cuda, mps or cpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def device_report(device: torch.device) -> str:
+    """One line for logs and notebooks: what will actually train the models."""
+    if device.type == "cuda":
+        index = device.index if device.index is not None else torch.cuda.current_device()
+        name = torch.cuda.get_device_name(index)
+        memory = torch.cuda.get_device_properties(index).total_memory / 2 ** 30
+        if torch.version.hip:
+            backend = f"ROCm/HIP {torch.version.hip}"
+        else:
+            backend = f"CUDA {torch.version.cuda}"
+        return f"{name} ({backend}, {memory:.0f} GiB, torch {torch.__version__})"
+    if device.type == "mps":
+        return f"Apple MPS (torch {torch.__version__})"
+    return f"CPU, {torch.get_num_threads()} threads (torch {torch.__version__})"
 
 
 def configure_threads(threads: int) -> None:
@@ -70,6 +121,35 @@ def configure_threads(threads: int) -> None:
         torch.set_num_interop_threads(1)
     except RuntimeError:
         pass
+
+
+class FastConv2d(nn.Conv2d):
+    """Conv2d expressed as unfold + GEMM: the same function, the same parameters.
+
+    WGAN-GP differentiates the critic twice (the gradient penalty), and on ROCm the MIOpen
+    conv double backward costs ~80 ms per critic step while the equivalent unfold+linear
+    graph takes ~12 ms. Parameters, output and initialisation are identical to nn.Conv2d,
+    so this is an implementation detail, not a change of the experiment. Used through
+    ``conv2d_cls`` only on ROCm; everywhere else the stock layer is kept.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        cols = F.unfold(x, self.kernel_size, dilation=self.dilation,
+                        padding=self.padding, stride=self.stride)
+        weight = self.weight.reshape(self.out_channels, -1)
+        out = torch.einsum("oc,bcl->bol", weight, cols)
+        if self.bias is not None:
+            out = out + self.bias.view(1, -1, 1)
+        height = (x.shape[2] + 2 * self.padding[0] - self.dilation[0] * (self.kernel_size[0] - 1)
+                  - 1) // self.stride[0] + 1
+        width = (x.shape[3] + 2 * self.padding[1] - self.dilation[1] * (self.kernel_size[1] - 1)
+                 - 1) // self.stride[1] + 1
+        return out.view(x.shape[0], self.out_channels, height, width)
+
+
+def conv2d_cls():
+    """FastConv2d on ROCm, stock Conv2d on CUDA/MPS/CPU."""
+    return FastConv2d if torch.version.hip else nn.Conv2d
 
 
 def _dataset_cls(dataset: str):

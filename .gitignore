@@ -221,3 +221,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ROCm / GPU-прогон: локальные окружения и кэши не коммитятся
+.venv-rocm/
+.pip-cache/
+.tmp/
+.rocm-setup/
+.miopen-db/
+.miopen/
+.miopen-cache/
+.torch_home/
+.jupyter-runtime/
+.jupyter-config/
+.mplconfig/
+.jupyter/
+notebooks/_test_seeds.ipynb
+artifacts/notebook_seeds*/
+artifacts/toy8_seeds/
+artifacts/data/
