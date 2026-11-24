@@ -300,7 +300,67 @@
   ]
 ]
 
-// ------------------------------------------------------------------ 12. FID
+// ------------------------------------------------------------------ 12. что такое FID
+#slide("FID: что это и как считается")[
+  FID (Fréchet Inception Distance, Heusel et al., 2017) сравнивает два гауссовых распределения — реальных
+  и сгенерированных признаков. Признаки считает замороженный InceptionV3 (ImageNet):
+  2048 чисел на картинку, метки датасета ему не нужны.
+
+  #v(1.5mm)
+  #align(center)[
+  #grid(
+    columns: (auto, auto, auto, auto, auto),
+    column-gutter: 3mm,
+    row-gutter: 3mm,
+    align: (right + horizon, center + horizon, center + horizon, center + horizon,
+      left + horizon),
+    [#box(
+      fill: rgb("#F2F5FA"), stroke: 0.5pt + rgb("#D6DEEB"), radius: 1mm,
+      inset: (x: 2.5mm, y: 1.4mm),
+    )[5000 реальных]],
+    [→],
+    [#box(
+      fill: rgb("#F2F5FA"), stroke: 0.5pt + rgb("#D6DEEB"), radius: 1mm,
+      inset: (x: 2.5mm, y: 1.4mm),
+    )[InceptionV3 \ 2048 признаков]],
+    [→],
+    [$mu_r, Sigma_r$],
+    [#box(
+      fill: rgb("#F2F5FA"), stroke: 0.5pt + rgb("#D6DEEB"), radius: 1mm,
+      inset: (x: 2.5mm, y: 1.4mm),
+    )[5000 сгенерированных]],
+    [→],
+    [#box(
+      fill: rgb("#F2F5FA"), stroke: 0.5pt + rgb("#D6DEEB"), radius: 1mm,
+      inset: (x: 2.5mm, y: 1.4mm),
+    )[InceptionV3 \ 2048 признаков]],
+    [→],
+    [$mu_g, Sigma_g$],
+  )
+  ]
+
+  #v(2mm)
+  #align(center)[
+    #box(
+      fill: rgb("#F2F5FA"), stroke: 0.5pt + rgb("#D6DEEB"), radius: 1mm,
+      inset: (x: 5mm, y: 2.2mm),
+    )[
+      $ "FID" = norm(mu_r - mu_g)^2
+        + "Tr"(Sigma_r + Sigma_g - 2 (Sigma_r Sigma_g)^(1\/2)) $
+    ]
+  ]
+
+  #v(2mm)
+  - *Смысл.* Первое слагаемое — сдвиг средних («похожесть»), второе — различие
+    ковариаций («разнообразие»). Меньше — лучше; ноль — распределения неотличимы.
+  - *Зачем.* Качество и разнообразие одним числом, без меток; MSE и PSNR сравнивают пиксели
+    и штрафуют за допустимые вариации, а FID — признаки.
+  - *Границы.* Абсолютные значения сравнимы только внутри одной постановки; «хорошо»
+    задаёт порог шума — FID между двумя срезами реальных данных.
+
+]
+
+// ------------------------------------------------------------------ 13. FID
 #slide("FID: что он ловит и что нет")[
   #grid(
     columns: (1fr, 108mm),
