@@ -401,7 +401,7 @@
 
 // ------------------------------------------------------------------ 14. источники
 #slide("Источники")[
-  1. Ноутбук с экспериментом: #text(fill: rgb("#2B5D9E"))[#link("https://colab.research.google.com/drive/1SLqshSoneMfIykaZICaaix6uc7iX33w0?usp=sharing")]
+  1. Ноутбук с экспериментом (main): #text(fill: rgb("#2B5D9E"))[#link("https://github.com/ktveritnev23/gan-collapse-experiment-tveritnev")]
   1. Goodfellow I. et al. Generative Adversarial Networks, 2014.
      #text(fill: rgb("#2B5D9E"))[arXiv:1406.2661]
   2. Radford A., Metz L., Chintala S.
